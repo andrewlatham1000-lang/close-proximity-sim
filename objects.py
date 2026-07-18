@@ -1,81 +1,148 @@
 import numpy as np
 from OpenGL.GL import *
 from matplotlib import pyplot as plt
+from relativeMotion import *
+
+def quarternion_multiplication(q, p):
+    # Performs quarternion multiplication q x p
+    # ie. returns combined rotation of p followed by q
+
+    return np.array([q[3]*p[0] + q[0]*p[3] + q[1]*p[2] - q[2]*p[1],
+                     q[3]*p[1] - q[0]*p[2] + q[1]*p[3] + q[2]*p[0],
+                     q[3]*p[2] + q[0]*p[1] - q[1]*p[0] + q[2]*p[3],
+                     q[3]*p[3] - q[0]*p[0] - q[1]*p[1] - q[2]*p[2]])
+
+def q2R(q):
+    # Converts given quarternion into a rotation matrix
+    q1, q2, q3, q4 = q
+
+    R1 = np.array([q1**2 - q2**2 - q3**2 + q4**2,
+                    2 * (q1*q2 + q3*q4),
+                    2 * (q1*q3 - q2*q4)])
+    
+    R2 = np.array([2 * (q1*q2 - q3*q4),
+                    -q1**2 + q2**2 - q3**2 + q4**2,
+                    2 * (q1*q4 + q2*q3)])
+    
+    R3 = np.array([2 * (q1*q3 + q2*q4),
+                    2 * (-q1*q4 + q2*q3),
+                    -q1**2 - q2**2 + q3**2 + q4**2])
+    
+    R = np.array([R1, 
+                    R2, 
+                    R3])
+
+    return R
+
+##########################################################################################################################
+############################################ BODY & SHAPE CLASSES ########################################################
+##########################################################################################################################
+
 
 class Body:
+    """
+    Bodies are made of base shapes and are affected by physics
+    Position and velocity are given in the global inertial coordinate system
+    All other parameters are defined in body-fixed coordinates
+    Bodies will move and rotate around their calculated centre of mass
+
+    Something is currently wrong with angular momentum, applies in inertial coords
+    not body fixed
+    """
+
     def __init__(self):
-        self.COM = np.array([0,0,0])
-        self.basis = np.array([[1., 0., 0.],
-                               [0., 1., 0.],
-                               [0., 0., 1.]])
+        self.name =str()
+        self.position = np.array([0., 0., 0.])
+        self.velocity = np.array([0., 0., 0.])
+        self.COM = np.array([0.,0.,0.])
+        self.basis = np.diag([1.,1.,1.])
+        self.rotation_matrix = np.array([[1., 0., 0.],
+                                         [0., 1., 0.],
+                                         [0., 0., 1.]])
+        self.quarternion = np.array([0., 0., 0., 1.])
+        self.d_quarternion = np.array([0., 0., 0., 0.])
+        self.inertia_matrix = np.array([[0., 0., 0.],
+                                        [0., 0., 0.],
+                                        [0., 0., 0.]])
+        self.angular_momentum = np.array([0., 0., 0.])
+        self.angular_velocity = np.array([0., 0., 0.])
+        
         
         self.shapes = np.array([], dtype=object)
         
     def calculate_COM(self):
+        # Calculate COM of body
         if len(self.shapes) == 1:
-            self.COM = self.shapes[0].COM
+            self.COM = self.shapes[0].position
         else:
-            xs, ys, zs = np.array([s.COM for s in self.shapes]).T
-            self.COM = np.array([np.mean(xs),
-                                 np.mean(ys),
-                                 np.mean(zs)])
+            xs, ys, zs = np.array([s.position for s in self.shapes]).T
+
+            ms = np.array([s.mass for s in self.shapes])
+            M = np.sum(ms)
+            self.COM = np.array([np.sum(xs * ms) / M,
+                                 np.sum(ys * ms) / M,
+                                 np.sum(zs * ms) / M])
+        
+
+    def calculate_inertia_matrix(self):
+        # Calculate inertia matrix for body for rotational motion
+        if len(self.shapes) == 1:
+            self.inertia_matrix = self.shapes[0].inertia_matrix
+        else:
+            I = np.zeros((3,3))
+            for s in self.shapes:
+                I_cm = np.dot(s.rotation_matrix, np.dot(s.inertia_matrix, s.rotation_matrix.T))
+                r1, r2, r3 = np.abs(s.position - self.COM)
+                I_r = I_cm + s.mass * np.array([[r2**2 + r3**2,    r1 * r2   ,    r1 * r3   ],
+                                                [   r1 * r2   , r1**2 + r3**2,    r2 * r3   ],
+                                                [   r1 * r3   ,    r2 * r3   , r1**2 + r2**2]])
+                I += I_r
+            self.inertia_matrix = I
+
+    def dH(self, H):
+        # Impulsive change in angular momentum of body
+        # H is a vector specifying change in angular momentum in body fixed x,y,z
+        self.angular_momentum += H
+        self.angular_velocity = np.dot(np.linalg.inv(self.inertia_matrix), self.angular_momentum)
+        w1, w2, w3 = self.angular_velocity
+        w_matrix = np.array([[ 0 ,  w3, -w2, w1],
+                             [-w3,  0 ,  w1, w2],
+                             [ w2, -w1,  0 , w3],
+                             [-w1, -w2, -w3, 0 ]])
+        self.d_quarternion = np.dot(w_matrix, self.quarternion)
+    
         
     def add(self, shape):
         self.shapes = np.append(self.shapes, shape)
         shape.parent = self
         self.calculate_COM()
+        self.calculate_inertia_matrix()
     
     def remove(self, shape):
         i = np.where(self.shapes == shape)
         self.shapes = np.delete(self.shapes, i)
         shape.parent = None
+        self.calculate_COM()
+        self.calculate_inertia_matrix()
         
-    def plot(self):
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+        # Convert COM to global coords and plot
+        inertial_COM = camera_zoom * np.dot(camera_rotation, (self.position)) + camera_offset
         glPointSize(5)
         glColor3f(1,1,0)
         glBegin(GL_POINTS)
-        glVertex3f(*self.COM)
+        glVertex3f(*inertial_COM)
         glEnd()
-
-
-        # ax.plot(self.COM[0], self.COM[1], self.COM[2], "ro")
         
-        # basis_colors = np.array(["red", "green", "blue"])
-        # for c, b in enumerate(self.basis.T):
-        #     ax.plot(
-        #         [self.COM[0], self.COM[0]+b[0]],
-        #         [self.COM[1], self.COM[1]+b[1]],
-        #         [self.COM[2], self.COM[2]+b[2]],
-        #         color=basis_colors[c]
-        #         )
-            
+        # Find rotation matrix to convert shapes from body-fixed into global coords
+        self.rotation_matrix = q2R(self.quarternion)
         for s in self.shapes:
-            s.plot()
-            
-    def scale(self, scale, global_scale=False):
-        if type(scale) == int or type(scale) == float:
-            scale = scale * np.ones(3)
-        scale_matrix = np.diag(scale)
-        
-        if global_scale:
-            self.COM = np.dot(scale_matrix, self.COM)
-            for s in self.shapes:
-                s.COM = np.dot(scale_matrix, s.COM)
-                s.basis = np.dot(scale_matrix, s.basis)
-        else:
-            for s in self.shapes:
-                s.COM = np.dot(scale_matrix, s.COM - self.COM) + self.COM
-                s.basis = np.dot(scale_matrix, s.basis)
-        
-            
-            
+            s.plot(camera_rotation, camera_zoom, camera_offset)
     
     def move(self, offset):
-        self.COM += offset
-        for s in self.shapes:
-            s.COM += offset
+        self.position += offset
     
-    def rotate(self, axis, angle, global_rotate=False):
+    def rotate(self, axis, angle):
         angle = np.radians(angle)
         axis = axis / np.linalg.norm(axis)
         
@@ -83,54 +150,93 @@ class Body:
                       axis[1] * np.sin(angle/2),
                       axis[2] * np.sin(angle/2),
                       np.cos(angle/2)])
-        q1, q2, q3, q4 = q
+
+        self.quarternion = quarternion_multiplication(q, self.quarternion)
+
+
+    def update_timestep(self, dt, mu, target_h, target_position, target_velocity):
+        # Time given in milliseconds
+        # Update rotation, normalising quarternion to prevent shape deformation
+        # then update quarternion derivative
+        dq = self.d_quarternion * dt / 1000
+        self.quarternion += dq
+        self.quarternion /= np.linalg.norm(self.quarternion)
+        w1, w2, w3 = self.angular_velocity
+        w_matrix = np.array([[ 0 ,  w3, -w2, w1],
+                             [-w3,  0 ,  w1, w2],
+                             [ w2, -w1,  0 , w3],
+                             [-w1, -w2, -w3, 0 ]])
+        self.d_quarternion = np.dot(w_matrix, self.quarternion)
+
+        # Movement update
+        # Uses functions from relativeMotion file to integrate relative
+        # orbital motion equations using Eular predictor-corrector method
+        state = np.concatenate((self.position, self.velocity))
+        accel0 = relative_acceleration(
+            state, 
+            mu, 
+            target_h, 
+            target_position, 
+            target_velocity)
+
+        vel0 = self.velocity + accel0 * (dt/1000)
+        pos0 = self.position + vel0 * (dt/1000) + 0.5 * accel0 * (dt/1000)**2
+        half_state = np.concatenate((pos0, vel0))
+
+        accel1 = relative_acceleration(
+            half_state, 
+            mu, 
+            target_h, 
+            target_position, 
+            target_velocity)
         
-        R1 = np.array([q1**2 - q2**2 - q3**2 + q4**2,
-                       2 * (q1*q2 + q3*q4),
-                       2 * (q1*q3 - q2*q4)])
+        self.velocity = self.velocity + 0.5 * (accel0 + accel1) * (dt/1000)
+        self.position = (
+            self.position + 
+            0.5  * (vel0 + self.velocity) * (dt/1000) +
+            0.25 * (accel0 + accel1) * (dt/1000)**2)
         
-        R2 = np.array([2 * (q1*q2 - q3*q4),
-                       -q1**2 + q2**2 - q3**2 + q4**2,
-                       2 * (q1*q4 + q2*q3)])
-        
-        R3 = np.array([2 * (q1*q3 + q2*q4),
-                       2 * (-q1*q4 + q2*q3),
-                       -q1**2 - q2**2 + q3**2 + q4**2])
-        
-        R = np.array([R1, 
-                      R2, 
-                      R3])
- 
-        self.basis = np.dot(R.T, self.basis)
-        
-        if global_rotate:
-            self.COM = np.dot(R.T, self.COM)
-            for s in self.shapes:
-                s.COM = np.dot(R.T, s.COM)
-                s.basis = np.dot(R.T, s.basis)
-        else:
-            for s in self.shapes:
-                s.COM = np.dot(R.T, s.COM - self.COM) + self.COM
-                s.basis = np.dot(R.T, s.basis)
-        
+
+
 
 
 class Shape:  
-    def scale(self, scale, global_scale=False):
+    # Parent class for all primitive shape objects
+    def __init__(self, density):
+        self.parent = None
+        self.position = np.array([0., 0., 0.])
+        self.basis = np.array([[1., 0., 0.],
+                               [0., 1., 0.],
+                               [0., 0., 1.]])
+        self.rotation_matrix = np.array([[1., 0., 0.],
+                                         [0., 1., 0.],
+                                         [0., 0., 1.]])
+        self.quarternion = np.array([0., 0., 0., 0.])
+
+        self.density = density
+        self.mass = density * self.volume()
+        self.inertia_matrix = self.inertia()
+        
+
+    def scale(self, scale):
         if type(scale) == int or type(scale) == float:
             scale = scale * np.ones(3)
         scale_matrix = np.diag(scale)
         
         self.basis = np.dot(scale_matrix, self.basis)
-        if global_scale:
-            self.COM = np.dot(scale_matrix, self.COM)
+        self.mass = self.density * self.volume()
+        self.inertia_matrix = self.inertia()
+        if self.parent:
+            self.parent.calculate_COM()
                 
             
-    def move(self, offset, global_offset=False):
-        self.COM += offset
+    def move(self, offset):
+        self.position += offset
+        if self.parent:
+            self.parent.calculate_COM()
             
             
-    def rotate(self, axis, angle, global_rotate=False):
+    def rotate(self, axis, angle):
         angle = np.radians(angle)
         axis = axis / np.linalg.norm(axis)
         
@@ -138,74 +244,90 @@ class Shape:
                       axis[1] * np.sin(angle/2),
                       axis[2] * np.sin(angle/2),
                       np.cos(angle/2)])
-        q1, q2, q3, q4 = q
         
-        R1 = np.array([q1**2 - q2**2 - q3**2 + q4**2,
-                       2 * (q1*q2 + q3*q4),
-                       2 * (q1*q3 - q2*q4)])
+        R = q2R(q)
         
-        R2 = np.array([2 * (q1*q2 - q3*q4),
-                       -q1**2 + q2**2 - q3**2 + q4**2,
-                       2 * (q1*q4 + q2*q3)])
-        
-        R3 = np.array([2 * (q1*q3 + q2*q4),
-                       2 * (-q1*q4 + q2*q3),
-                       -q1**2 - q2**2 + q3**2 + q4**2])
-        
-        R = np.array([R1, 
-                      R2, 
-                      R3])
+        self.rotation_matrix = np.dot(R.T, self.rotation_matrix) 
+        if self.parent:
+            self.parent.calculate_COM()
 
-        self.basis = np.dot(R.T, self.basis) 
-        if global_rotate:
-            self.COM = np.dot(R.T, self.COM)
-
-        
+    def find_inertial(self, camera_rotation, camera_zoom, camera_offset):
+        if self.parent:
+            inertial_COM = (camera_zoom * 
+                            np.dot(camera_rotation, 
+                                (np.dot(self.parent.rotation_matrix, 
+                                        self.position - self.parent.COM) + 
+                                        self.parent.position)) + 
+                            camera_offset)
             
+            inertial_vertices = (camera_zoom * 
+                                 np.dot(np.dot(camera_rotation, 
+                                        np.dot(self.parent.rotation_matrix, 
+                                                np.dot(self.rotation_matrix, self.basis))), 
+                                        self.vertices.T).T + 
+                                inertial_COM)
+        else:
+            inertial_COM = camera_zoom * np.dot(camera_rotation, self.position) + camera_offset
+            inertial_vertices = camera_zoom * np.dot(np.dot(camera_rotation, np.dot(self.rotation_matrix, self.basis)), self.vertices.T).T + inertial_COM
+
+        return inertial_COM, inertial_vertices
+        
+    def update_timestep(self):
+        pass
+            
+
+##########################################################################################################################
+################################################### SHAPES ###############################################################
+##########################################################################################################################
+
+
 class Point(Shape):
     def __init__(self):
-        self.parent = None
-        self.COM = np.array([0., 0., 0.])
-        
-        self.basis = np.array([[1., 0., 0.],
-                               [0., 1., 0.],
-                               [0., 0., 1.]])
+        super().__init__(0)
     
-    def plot(self):
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+
+        inertial_COM = camera_zoom * np.dot(camera_rotation, self.position) + camera_offset
+        global_axes = camera_zoom * np.dot(camera_rotation, np.dot(self.rotation_matrix, self.basis))
+
         glPointSize(8)
         glColor3f(1,1,1)
         glBegin(GL_POINTS)
-        glVertex3f(*self.COM)
+        glVertex3f(*inertial_COM)
         glEnd()
+
+        
 
         glBegin(GL_LINES)
         glColor3f(1,0,0)
-        glVertex3f(self.COM[0],self.COM[1],self.COM[2])
-        glVertex3f(self.COM[0] + 0.5*self.basis[0,0], 
-                   self.COM[1] + 0.5*self.basis[1,0], 
-                   self.COM[2] + 0.5*self.basis[2,0])
+        glVertex3f(inertial_COM[0], inertial_COM[1], inertial_COM[2])
+        glVertex3f(inertial_COM[0] + 0.5*global_axes[0,0], 
+                   inertial_COM[1] + 0.5*global_axes[1,0], 
+                   inertial_COM[2] + 0.5*global_axes[2,0])
         
         glColor3f(0.5, 1, 0.35)
-        glVertex3f(self.COM[0],self.COM[1],self.COM[2])
-        glVertex3f(self.COM[0] + 0.5*self.basis[0,1], 
-                   self.COM[1] + 0.5*self.basis[1,1], 
-                   self.COM[2] + 0.5*self.basis[2,1])
+        glVertex3f(inertial_COM[0],inertial_COM[1],inertial_COM[2])
+        glVertex3f(inertial_COM[0] + 0.5*global_axes[0,1], 
+                   inertial_COM[1] + 0.5*global_axes[1,1], 
+                   inertial_COM[2] + 0.5*global_axes[2,1])
 
         glColor3f(0.53,1,1)
-        glVertex3f(self.COM[0],self.COM[1],self.COM[2])
-        glVertex3f(self.COM[0] + 0.5*self.basis[0,2], 
-                   self.COM[1] + 0.5*self.basis[1,2], 
-                   self.COM[2] + 0.5*self.basis[2,2])
+        glVertex3f(inertial_COM[0],inertial_COM[1],inertial_COM[2])
+        glVertex3f(inertial_COM[0] + 0.5*global_axes[0,2], 
+                   inertial_COM[1] + 0.5*global_axes[1,2], 
+                   inertial_COM[2] + 0.5*global_axes[2,2])
         glEnd()
+    
+    def volume(self):
+        return 0
+    
+    def inertia(self):
+        return np.zeros((3,3), dtype=np.float32)
 
 
 class Cube(Shape):
-    def __init__(self):
-        self.parent = None
-        self.COM = np.array([0., 0., 0.])
-        self.basis = np.array([[1., 0., 0.],
-                               [0., 1., 0.],
-                               [0., 0., 1.]])
+    def __init__(self, density=2700):
+        super().__init__(density)
         
         self.vertices = np.array([[-0.5, -0.5, -0.5],
                                   [0.5, -0.5, -0.5],
@@ -221,28 +343,32 @@ class Cube(Shape):
                                [4,5], [5,6], [6,7], [7,4],
                                [0,4], [1,5], [2,6], [3,7]])
         
-    def plot(self):
-        
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+        inertial_COM, inertial_vertices = self.find_inertial(camera_rotation, camera_zoom, camera_offset)
+
+
         glColor3f(0.9, 0.06, 0.9)
         glBegin(GL_LINES)
-
-        inertial_vertices = np.dot(self.basis, self.vertices.T).T + self.COM
 
         for l in self.lines:
             glVertex3f(inertial_vertices[l[0], 0], inertial_vertices[l[0],1], inertial_vertices[l[0],2])
             glVertex3f(inertial_vertices[l[1], 0], inertial_vertices[l[1],1], inertial_vertices[l[1],2])
 
-
         glEnd()
             
+    def volume(self):
+        return np.prod(np.linalg.norm(self.basis, axis = 0))
+
+    def inertia(self):
+        lx, ly, lz = np.linalg.norm(self.basis, axis = 0)
+        Ix = (1/12) * self.mass * (ly**2 + lz**2)
+        Iy = (1/12) * self.mass * (lx**2 + lz**2)
+        Iz = (1/12) * self.mass * (lx**2 + ly**2)
+        return np.diag([Ix, Iy, Iz])
         
 class Sphere(Shape):
-    def __init__(self):
-        self.parent = None
-        self.COM = np.array([0., 0., 0.])
-        self.basis = np.array([[1., 0., 0.],
-                               [0., 1., 0.],
-                               [0., 0., 1.]])
+    def __init__(self, density=2700):
+        super().__init__(density)
         
         self.n, self.m = 9, 5
         theta = np.linspace(0, 2*np.pi, self.n)
@@ -259,8 +385,9 @@ class Sphere(Shape):
         
         self.vertices = positions[1:]
         
-    def plot(self):
-        inertial_vertices = np.dot(self.basis, self.vertices.T).T + self.COM
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+        inertial_COM, inertial_vertices = self.find_inertial(camera_rotation, camera_zoom, camera_offset)
+
         X, Y, Z = inertial_vertices.T
         latX, latY, latZ = (np.array(np.split(X, self.n)).T, 
                             np.array(np.split(Y, self.n)).T, 
@@ -284,15 +411,21 @@ class Sphere(Shape):
                 glVertex3f(longX[i, j+1], longY[i, j+1], longZ[i, j+1])
 
         glEnd()
+
+    def volume(self):
+        return (4/3) * np.pi * np.prod(np.linalg.norm(self.basis, axis = 0))
+
+    def inertia(self):
+        lx, ly, lz = np.linalg.norm(self.basis, axis = 0)
+        Ix = (1/5) * self.mass * (ly**2 + lz**2)
+        Iy = (1/5) * self.mass * (lx**2 + lz**2)
+        Iz = (1/5) * self.mass * (lx**2 + ly**2)
+        return np.diag([Ix, Iy, Iz])
         
 
 class Cylinder(Shape):
-    def __init__(self):
-        self.parent = None
-        self.COM = np.array([0., 0., 0.])
-        self.basis = np.array([[1., 0., 0.],
-                               [0., 1., 0.],
-                               [0., 0., 1.]])
+    def __init__(self, density=2700):
+        super().__init__(density)
 
         thetas = np.linspace(0, 2*np.pi, 8, endpoint=False)
         x = 0.5 * np.concatenate((np.cos(thetas), np.cos(thetas)))
@@ -305,8 +438,8 @@ class Cylinder(Shape):
             [8,9], [9,10], [10,11], [11,12], [12,13], [13,14], [14,15], [15,8],
             [0,8], [1,9], [2,10], [3,11], [4,12], [5,13], [6,14], [7,15]])
 
-    def plot(self):
-        inertial_vertices = np.dot(self.basis, self.vertices.T).T + self.COM
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+        inertial_COM, inertial_vertices = self.find_inertial(camera_rotation, camera_zoom, camera_offset)
 
         glColor3f(0.9, 0.06, 0.9)
         glBegin(GL_LINES)
@@ -317,4 +450,12 @@ class Cylinder(Shape):
         
         glEnd()
 
-
+    def volume(self):
+        return np.pi * np.prod(np.linalg.norm(self.basis, axis = 0))
+    
+    def inertia(self):
+        lx, ly, lz = np.linalg.norm(self.basis, axis = 0)
+        Ix = (1/12) * self.mass * (3*ly**2 + lz**2)
+        Iy = (1/12) * self.mass * (3*lx**2 + lz**2)
+        Iz = (1/4) * self.mass * (lx**2 + ly**2)
+        return np.diag([Ix, Iy, Iz])

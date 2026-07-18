@@ -1,0 +1,59 @@
+{"target": {
+    "mu": 3.986e14,
+    "SMA": 6778e3,
+    "ECC": 0.0,
+    "INC": 0.0,
+    "RAAN": 0.0,
+    "AOP": 0.0,
+    "TA": 0.0
+},
+    
+    "bodies": [
+    {
+        "name": "Main",
+        "position": [0,0,0],
+        "velocity": [0,0,0],
+        "rotate": [0,0,1, -90],
+        "H": 0,
+        "shapes": [
+            {
+                "type": "Cube",
+                "scale": 1,
+                "move": 0,
+                "rotate": [0,1,0, 45]
+            },
+            {
+                "type": "Cylinder",
+                "scale": [1,1,2],
+                "move": [0,1.5,0],
+                "rotate": [1,0,0, 90]
+            },
+            {
+                "type": "Sphere",
+                "scale": 2,
+                "move": [0,3,0],
+                "rotate": 0
+            }
+        ]
+    },
+    {
+        "name": "Side",
+        "position": [-30,90,10],
+        "velocity": [0.113, 0.00211, -0.00245],
+        "rotate": 0,
+        "H": 0,
+        "shapes": [
+            {
+                "type": "Cube",
+                "scale": [0.5, 2, 2],
+                "move": 0,
+                "rotate": 0
+            }
+        ]
+    }
+],
+
+"events": {
+    "00:00:00.00": "Main add H [40000, 0, 0]; Side add H [1000, 0, 0]"
+}
+}
