@@ -25,6 +25,12 @@ def load_body(b):
 
         body.add(shape)
 
+    for t in b["thrusters"]:
+        thruster = Thruster(t["name"])
+        thruster.position = t["position"]
+        body.add(thruster)
+
+
     if type(b["rotate"]) == list:
         body.rotate(b["rotate"][:3], b["rotate"][3])
     
@@ -51,28 +57,6 @@ def load_target(data):
     # Loads data about the target point from json file
     target_data = [data[key] for key in data]
     return target_data
-
-
-def execute_commands(bodies, cmds):
-    # Needs to be reworked into actual command structure
-    # Currently just used to test changing body parameters mid-simulation
-    cmds = cmds.split(";")
-    for cmd in cmds:
-        target_body = None
-        cmd = cmd.strip()
-        body_name, operation, variable, *value = cmd.split(" ")
-        value = json.loads("".join(value))
-
-        for b in bodies:
-            if b.name == body_name:
-                target_body = b
-                break
-        if not target_body:
-            print("Target body not found")
-        
-        if operation == "add":
-            if variable == "H":
-                target_body.dH(value)
 
 
 def load(path):

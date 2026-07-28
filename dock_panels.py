@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import (QLabel,
                              QWidget,
                              QVBoxLayout,
                              QHBoxLayout,
+                             QScrollArea,
+                             QComboBox,
                              )
 from PyQt5.QtCore import Qt
 from numpy import insert
@@ -68,12 +70,13 @@ class LeftDock(QLabel):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedWidth(450)
+        self.setFixedWidth(500)
         self.setContentsMargins(0,0,0,0)
         self.setStyleSheet("background-color: gray;")
 
         # Adding timeline widget to the top centre of the dock
         self.timeline = MissionTimeline(self)
+
         layout = QVBoxLayout()
         layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter) 
         layout.setSpacing(0)
@@ -108,9 +111,17 @@ class MissionTimeline(QWidget):
         super().__init__()
         self.parent = parent
         
-        self.setFixedWidth(400)
+        self.setFixedWidth(480)
         timeline_layout = QVBoxLayout()
         timeline_layout.setContentsMargins(0,0,0,0)
+        timeline_layout.setSpacing(0)
+
+        event_widget = QWidget()
+        event_layout = QVBoxLayout()
+        event_layout.setContentsMargins(0,0,0,0)
+
+        event_scroll = QScrollArea()
+        event_scroll.setFixedHeight(600)
 
         title = QLabel("SIMULATION TIMELINE")
         title.setFixedHeight(60)
@@ -131,12 +142,15 @@ class MissionTimeline(QWidget):
         self.event_table[0].cmd_label.setText("INITIALISATION\n"+self.event_table[0].cmd_label.text()) 
 
         for row in self.event_table:
-            timeline_layout.addWidget(row)
+            event_layout.addWidget(row)
 
-        timeline_layout.setSpacing(0)
+        event_widget.setLayout(event_layout)
+        event_scroll.setWidget(event_widget)
+        timeline_layout.addWidget(event_scroll)
+
+        
         self.setLayout(timeline_layout)
-        self.setFixedSize(self.minimumSizeHint()) # Keeps widget compact on screen
-
+        self.setFixedHeight(self.minimumSizeHint().height()) # Keeps widget compact on screen
 
 class TableRow(QWidget):
     # Row for timeline table containing time at which an event occurs
@@ -199,10 +213,102 @@ class TableRow(QWidget):
 
 
 class RightDock(QLabel):
+    """
+    Use to show information about current state of selected object
+    """
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setText("Right dock")
         self.setStyleSheet("background-color:gray; font-size:22px")
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setFixedWidth(400)
+
+        self.info = ObjectInfo(self)
+
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter) 
+        layout.setSpacing(0)
+        layout.addWidget(self.info)
+        self.setLayout(layout)
+
+
+class ObjectInfo(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.cur_index = 0
+
+        self.setFixedWidth(380)
+
+        info_layout = QVBoxLayout()
+        title = QLabel()
+        self.combo = QComboBox()
+        self.info = QLabel()
+
+        title.setText("OBJECT INFORMATION")
+        title.setFixedHeight(60)
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("background-color:gray;" # Will probably also be moved into dedicated CSS file
+                            "font-size: 30px;"
+                            "color: #f5f5f5;"
+                            "font-family:'Lucida Console';"
+                            "border: 2px outset #444444;"
+                            "font-weight: bold;")
+
+        for b in self.parent.parent.bodies:
+            self.combo.addItem(b.name)
+
+        def update_index(i):
+            self.cur_index = i
+            self.view_info()
+            
+        self.combo.currentIndexChanged.connect(update_index)
+        self.combo.setFixedHeight(40)
+        self.combo.setStyleSheet(
+            "QComboBox{"
+            "color: #f5f5f5;"
+            "font-family: 'Lucida Console';"
+            "selection-background-color: gray;"
+            "border: 2px outset #444444;"
+            "}"
+
+            "QComboBox QAbstractItemView{"
+            "selection-background-color: #BBBBBB;"
+            "color: #f5f5f5;"
+            "selection-color: #000000;"
+            "}"
+        )
+
+        self.info.setFixedWidth(360)
+        self.info.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.info.setStyleSheet("border: 2px outset #444444;"
+                                "font-size: 19px;"
+                                "font-family: 'Lucida Console';"
+                                "color: #f5f5f5;")
+        
+        info_layout.addWidget(title)
+        info_layout.addWidget(self.combo)
+        info_layout.addWidget(self.info)
+        self.view_info()
+
+        self.setLayout(info_layout)
+        self.setFixedHeight(self.minimumSizeHint().height())
+
+    def view_info(self):
+        selected_body = self.parent.parent.bodies[self.cur_index]
+        name = selected_body.name
+        position = [round(p, 4) for p in selected_body.position]
+        velocity = [round(v, 4) for v in selected_body.velocity]
+        mass = round(selected_body.mass, 4)
+
+        self.info.setText(f"Name: {name}\n\n"
+                          
+                          f"Mass [kg]: {mass}\n\n"
+
+                          f"              X = {position[0]}\n"
+                          f"Position [m]: Y = {position[1]}\n"
+                          f"              Z = {position[2]}\n\n"
+
+                          f"                VX = {velocity[0]}\n"
+                          f"Velocity [m/s]: VY = {velocity[1]}\n"
+                          f"                VZ = {velocity[2]}\n"
+                          )

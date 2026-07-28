@@ -22,8 +22,9 @@ class glWidget(QGLWidget):
         self.camera_rotation = np.array([[1., 0., 0.],
                                          [0., 1., 0.],
                                          [0., 0., 1.]])
-        self.rotate_camera([0,1,0], -40)
-        self.rotate_camera([1, 0, 0], 30)
+        self.rotate_camera([1,0,0], -90)
+        self.rotate_camera([0, 1, 0], -15)
+        self.rotate_camera([1,0,0], 15)
         self.zoom = 1
         self.camera_offset = np.array([0., 0., 0.])
         self.lim = 1
@@ -34,7 +35,6 @@ class glWidget(QGLWidget):
         
         # Make point for environment origin and setup array to hold body information
         self.origin = Point()
-        self.bodies = np.array([], dtype=object)
     
     def rotate_camera(self, axis, angle):
         # Use quarternions to rotate camera around an axis
@@ -126,6 +126,7 @@ class glWidget(QGLWidget):
         else:
             self.zoom *= 0.8
 
+        self.parent.time_controls.set_zoom(self.zoom)
         if self.parent.simulation_paused:
                 self.update()
 
@@ -133,10 +134,10 @@ class glWidget(QGLWidget):
         # Currently broken, intended to auto set canvas limits during initialisation
         # based on location and dimension of bodies in sim
         max_x, max_y, max_z = 0, 0, 0
-        for body in self.bodies:
-            x = abs(body.COM[0]) + abs(np.linalg.norm(body.basis[:, 0]))
-            y = abs(body.COM[1]) + abs(np.linalg.norm(body.basis[:, 1]))
-            z = abs(body.COM[2]) + abs(np.linalg.norm(body.basis[:, 2]))
+        for body in self.parent.bodies:
+            x = abs(body.position[0])
+            y = abs(body.position[1])
+            z = abs(body.position[2])
             if x > max_x:
                 max_x = x
             if y > max_y:
@@ -154,7 +155,7 @@ class glWidget(QGLWidget):
         glViewport(0, 0, 600, 600)
         self.find_view_lims()
         lim = self.lim
-        glOrtho(-lim, lim, -lim, lim, -100, 100)
+        glOrtho(-lim, lim, -lim, lim, -1e5, 1e5)
 
     def resizeGL(self, w, h):
         # Keep viewport centered and square during resizing
@@ -168,5 +169,5 @@ class glWidget(QGLWidget):
 
         # Plot origin point then all bodies in sim
         self.origin.plot(self.camera_rotation, self.zoom, self.camera_offset)
-        for body in self.bodies:
+        for body in self.parent.bodies:
             body.plot(self.camera_rotation, self.zoom, self.camera_offset)

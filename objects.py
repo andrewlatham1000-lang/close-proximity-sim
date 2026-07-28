@@ -42,12 +42,18 @@ def q2R(q):
 class Body:
     """
     Bodies are made of base shapes and are affected by physics
-    Position and velocity are given in the global inertial coordinate system
-    All other parameters are defined in body-fixed coordinates
     Bodies will move and rotate around their calculated centre of mass
+    Variables in body fixed frame:
+        Centre of mass
+        Inertia martrix
+        Angular momentum
+        Angular velocity
+    Variables in global LVLH frame:
+        Position
+        Velocity
+        Rotation matrix
+        Quarternion & time derivative of
 
-    Something is currently wrong with angular momentum, applies in inertial coords
-    not body fixed
     """
 
     def __init__(self):
@@ -66,9 +72,11 @@ class Body:
                                         [0., 0., 0.]])
         self.angular_momentum = np.array([0., 0., 0.])
         self.angular_velocity = np.array([0., 0., 0.])
+        self.mass = 0
         
         
         self.shapes = np.array([], dtype=object)
+        self.thrusters = np.array([], dtype=object)
         
     def calculate_COM(self):
         # Calculate COM of body
@@ -104,26 +112,31 @@ class Body:
         # H is a vector specifying change in angular momentum in body fixed x,y,z
         self.angular_momentum += H
         self.angular_velocity = np.dot(np.linalg.inv(self.inertia_matrix), self.angular_momentum)
-        w1, w2, w3 = self.angular_velocity
-        w_matrix = np.array([[ 0 ,  w3, -w2, w1],
-                             [-w3,  0 ,  w1, w2],
-                             [ w2, -w1,  0 , w3],
-                             [-w1, -w2, -w3, 0 ]])
-        self.d_quarternion = np.dot(w_matrix, self.quarternion)
     
         
-    def add(self, shape):
-        self.shapes = np.append(self.shapes, shape)
-        shape.parent = self
-        self.calculate_COM()
-        self.calculate_inertia_matrix()
+    def add(self, obj):
+        if obj.__class__.__name__ == "Thruster":
+            self.thrusters = np.append(self.thrusters, obj)
+            obj.parent = self
+        else:
+            self.shapes = np.append(self.shapes, obj)
+            obj.parent = self
+            self.mass += obj.mass
+            self.calculate_COM()
+            self.calculate_inertia_matrix()
     
-    def remove(self, shape):
-        i = np.where(self.shapes == shape)
-        self.shapes = np.delete(self.shapes, i)
-        shape.parent = None
-        self.calculate_COM()
-        self.calculate_inertia_matrix()
+    def remove(self, obj):
+        if obj.__class__.__name__ == "Thruster":
+            i = np.where(self.thrusters == obj)
+            self.thrusters = np.delete(self.thrusters, i)
+            obj.parent = None
+        else:
+            i = np.where(self.shapes == obj)
+            self.shapes = np.delete(self.shapes, i)
+            obj.parent = None
+            self.mass -= obj.mass
+            self.calculate_COM()
+            self.calculate_inertia_matrix()
         
     def plot(self, camera_rotation, camera_zoom, camera_offset):
         # Convert COM to global coords and plot
@@ -138,6 +151,8 @@ class Body:
         self.rotation_matrix = q2R(self.quarternion)
         for s in self.shapes:
             s.plot(camera_rotation, camera_zoom, camera_offset)
+        for t in self.thrusters:
+            t.plot(camera_rotation, camera_zoom, camera_offset)
     
     def move(self, offset):
         self.position += offset
@@ -158,26 +173,27 @@ class Body:
         # Time given in milliseconds
         # Update rotation, normalising quarternion to prevent shape deformation
         # then update quarternion derivative
-        dq = self.d_quarternion * dt / 1000
-        self.quarternion += dq
-        self.quarternion /= np.linalg.norm(self.quarternion)
-        w1, w2, w3 = self.angular_velocity
+        w1, w2, w3 = np.dot(q2R(self.quarternion), self.angular_velocity)
         w_matrix = np.array([[ 0 ,  w3, -w2, w1],
                              [-w3,  0 ,  w1, w2],
                              [ w2, -w1,  0 , w3],
                              [-w1, -w2, -w3, 0 ]])
         self.d_quarternion = np.dot(w_matrix, self.quarternion)
+        dq = self.d_quarternion * dt / 1000
+        self.quarternion += dq
+        self.quarternion /= np.linalg.norm(self.quarternion)
 
         # Movement update
         # Uses functions from relativeMotion file to integrate relative
-        # orbital motion equations using Eular predictor-corrector method
+        # orbital motion equations using Euler predictor-corrector method
         state = np.concatenate((self.position, self.velocity))
         accel0 = relative_acceleration(
             state, 
             mu, 
             target_h, 
             target_position, 
-            target_velocity)
+            target_velocity
+        )
 
         vel0 = self.velocity + accel0 * (dt/1000)
         pos0 = self.position + vel0 * (dt/1000) + 0.5 * accel0 * (dt/1000)**2
@@ -188,13 +204,15 @@ class Body:
             mu, 
             target_h, 
             target_position, 
-            target_velocity)
+            target_velocity
+        )
         
         self.velocity = self.velocity + 0.5 * (accel0 + accel1) * (dt/1000)
         self.position = (
             self.position + 
             0.5  * (vel0 + self.velocity) * (dt/1000) +
-            0.25 * (accel0 + accel1) * (dt/1000)**2)
+            0.25 * (accel0 + accel1) * (dt/1000)**2
+        )
         
 
 
@@ -275,6 +293,85 @@ class Shape:
     def update_timestep(self):
         pass
             
+
+class Thruster:
+    def __init__(self, name):
+        self.name = name
+        self.parent = None
+        self.position = np.zeros(3)
+
+        self.vertices = np.array([
+            [-0.05, -0.05, -0.05],
+            [0.05, -0.05, -0.05],
+            [0.05, 0.05, -0.05],
+            [-0.05, 0.05, -0.05],
+            
+            [-0.05, -0.05, 0.05],
+            [0.05, -0.05, 0.05],
+            [0.05, 0.05, 0.05],
+            [-0.05, 0.05, 0.05]
+        ])
+                
+        self.lines  =   np.array([
+            [0,1], [1,2], [2,3], [3,0],
+            [4,5], [5,6], [6,7], [7,4],
+            [0,4], [1,5], [2,6], [3,7],
+            [0,2], [0,5], [0,7],
+            [1,3], [1,4], [1,6],
+            [2,5], [2,7],
+            [3,4], [3,6],
+            [4,6], [5,7],
+        ])
+
+    def burn(self, thrust_vector, dt):
+        # Relate position to parent CoM
+        # Find compoment passing through CoM -> convert to dv
+        # Find component orthogonal to CoM -> convert to dH
+        dt /= 1000
+
+        pos2COM = self.parent.COM - self.position
+        pos2COM_mag = np.linalg.norm(pos2COM)
+        pos2COM_u = pos2COM / pos2COM_mag
+
+        thrust_mag = np.linalg.norm(thrust_vector)
+        thrust_vector_u = thrust_vector / thrust_mag
+
+        # Split thrust into pure & orthogonal components
+        pure_thrust = np.dot(thrust_vector, pos2COM_u) * pos2COM_u
+        orthog_thrust = np.cross(np.cross(pos2COM_u, thrust_vector), pos2COM_u)
+
+        # Linear velocity change
+        a = pure_thrust / self.parent.mass
+        self.parent.velocity += a * dt
+
+        # Rotation change
+        self.parent.dH(orthog_thrust * dt)
+
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+        inertial_COM = (
+            camera_zoom * 
+            np.dot(camera_rotation, 
+                (np.dot(self.parent.rotation_matrix, 
+                        self.position - self.parent.COM) + 
+                        self.parent.position)) + 
+            camera_offset)
+
+        inertial_vertices = (
+            camera_zoom * 
+            np.dot(np.dot(camera_rotation, self.parent.rotation_matrix), 
+                self.vertices.T).T + 
+            inertial_COM)
+
+        glColor3f(1.0, 0.10, 0.25)
+        glBegin(GL_LINES)
+
+        for l in self.lines:
+            glVertex3f(inertial_vertices[l[0], 0], inertial_vertices[l[0],1], inertial_vertices[l[0],2])
+            glVertex3f(inertial_vertices[l[1], 0], inertial_vertices[l[1],1], inertial_vertices[l[1],2])
+
+        glEnd()
+        
+
 
 ##########################################################################################################################
 ################################################### SHAPES ###############################################################
@@ -459,3 +556,4 @@ class Cylinder(Shape):
         Iy = (1/12) * self.mass * (3*lx**2 + lz**2)
         Iz = (1/4) * self.mass * (lx**2 + ly**2)
         return np.diag([Ix, Iy, Iz])
+

@@ -11,6 +11,7 @@ from glwidget import glWidget
 from time_control import *
 from dock_panels import *
 import missionParser as mp
+from commands import execute_commands
 import relativeMotion as relmo
 
 class MissionWindow(QMainWindow):
@@ -44,9 +45,12 @@ class MissionWindow(QMainWindow):
         self.event_times = list()
         self.mission_cmds = list()
         self.event_index = 0
+        self.ongoing_cmds = str()
         
         self.time_warp = np.array([1,2,5,10])
         self.current_warp = 0
+
+        self.bodies = np.array([], dtype=object)
         
         # Main timer for refreshing GUI
         self.timer = QTimer(self)
@@ -92,6 +96,7 @@ class MissionWindow(QMainWindow):
 
         self.mission_path = path
         bodies, self.event_times, self.mission_cmds, target = mp.load(path)
+        self.bodies = bodies
         self.mu = target[0]
         self.target_data = target[1:]
         self.tp0 = relmo.theta2tp(target[6], target[0], target[1], target[2]) * 1000
@@ -100,7 +105,6 @@ class MissionWindow(QMainWindow):
         self.target_h = np.sqrt(self.mu * target[1] * (1 - target[2]**2))
 
         self.initUI()
-        self.gl.bodies = bodies
         self.gl.update()
 
 
@@ -131,7 +135,7 @@ class MissionWindow(QMainWindow):
         self.time_controls.speed_factor.setText(f"x{self.time_warp[self.current_warp]}")
         mission = mp.load(self.mission_path)
         bodies, target = mission[0], mission[3]
-        self.gl.bodies = bodies
+        self.bodies = bodies
         self.target_data[5] = target[6]
         self.gl.update()
         self.left_dock.initialise_timeline()
@@ -164,10 +168,22 @@ class MissionWindow(QMainWindow):
     def timestep(self):
         # Main simulation timestep, called executed by timer
 
+
+        if self.ongoing_cmds != "": 
+            resps = execute_commands(self.bodies, self.ongoing_cmds, self.simulation_dt)
+            self.ongoing_cmds = ""
+            for r in resps:
+                if r:
+                    self.ongoing_cmds += r + ";"
+
         if (self.event_index < len(self.event_times) and
             self.simulation_time >= self.event_times[self.event_index]):
             # Execute mission commands at specificed simulation times
-            mp.execute_commands(self.gl.bodies, self.mission_cmds[self.event_index])
+            resps = execute_commands(self.bodies, self.mission_cmds[self.event_index], self.simulation_dt)
+            for r in resps:
+                if r:
+                    self.ongoing_cmds += r + ";"
+
             self.left_dock.increment_timeline()
             self.event_index += 1
 
@@ -186,7 +202,7 @@ class MissionWindow(QMainWindow):
         
         self.target_position, self.target_velocity = target_state[:3], target_state[3:]
                             
-        for body in self.gl.bodies:
+        for body in self.bodies:
             # Integrate forward motion of all bodies,
             body.update_timestep(self.time_warp[self.current_warp] * self.simulation_dt,
                                  self.mu,
@@ -196,5 +212,6 @@ class MissionWindow(QMainWindow):
         
         # Update visualiser widget and increment simulation time
         self.gl.update()
+        self.right_dock.info.view_info()
         self.simulation_time += self.time_warp[self.current_warp] * self.simulation_dt
         self.time_controls.display.show_time()

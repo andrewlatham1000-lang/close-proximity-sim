@@ -74,6 +74,20 @@ class TimeControl(QWidget):
             "font-family:'Lucida Console', monospace;")
         self.speed_factor.setGeometry(585, 0, 110, 60)
 
+        self.zoom_level = QLabel(self)
+        self.zoom_level.setText("Zoom: x1.00")
+        self.zoom_level.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
+        self.zoom_level.setStyleSheet(
+            "background-color:black;"
+            "color:white;"
+            "font-size: 30px;" 
+            "font-weight: bold;"
+            "font-family:'Lucida Console', monospace;")
+        self.zoom_level.setGeometry(750, 0, 350, 60)
+
+    def set_zoom(self, zoom):
+        self.zoom_level.setText(f"Zoom: x{zoom:.2f}")
+
 
 class TimeDisplay(QLCDNumber):
     def __init__(self, parent):
