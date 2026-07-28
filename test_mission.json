@@ -13,26 +13,32 @@
         "name": "Main",
         "position": [0,0,0],
         "velocity": [0,0,0],
-        "rotate": [0,0,1, -90],
+        "rotate": [1,0,0,0],
         "H": 0,
         "shapes": [
             {
                 "type": "Cube",
                 "scale": 1,
                 "move": 0,
-                "rotate": [0,1,0, 45]
+                "rotate": [0,0,1, 45]
             },
             {
                 "type": "Cylinder",
                 "scale": [1,1,2],
-                "move": [0,1.5,0],
-                "rotate": [1,0,0, 90]
+                "move": [0,0,1.5],
+                "rotate": 0
             },
             {
                 "type": "Sphere",
                 "scale": 2,
-                "move": [0,3,0],
+                "move": [0,0,3],
                 "rotate": 0
+            }
+        ],
+        "thrusters": [
+            {
+                "name": "T1",
+                "position": [0,0,0]
             }
         ]
     },
@@ -49,11 +55,20 @@
                 "move": 0,
                 "rotate": 0
             }
-        ]
+        ],
+        "thrusters": []
     }
 ],
 
 "events": {
-    "00:00:00.00": "Main add H [40000, 0, 0]; Side add H [1000, 0, 0]"
+    "00:00:00.00": "add Main H [40000, 0, 0]; add Side H [1000, 0, 0]",
+    "00:00:05.00": "burn Main T1 [-20000, 0, 0] 2",
+    "00:00:10.00": "burn Main T1 [-20000, 0, 0] 2",
+    "00:00:15.00": "burn Main T1 [20000, 0, 0] 2",
+    "00:00:20.00": "burn Main T1 [20000, 0, 0] 2",
+    "00:00:25.00": "burn Main T1 [-20000, 0, 0] 2",
+    "00:00:30.00": "burn Main T1 [-20000, 0, 0] 2",
+    "00:00:35.00": "burn Main T1 [20000, 0, 0] 2",
+    "00:00:40.00": "burn Main T1 [20000, 0, 0] 2"
 }
 }
