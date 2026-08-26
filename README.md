@@ -62,6 +62,7 @@ This setup allows for bodies to be more easily defined, and reduces the accumula
 ### Equations of Motion
 
 Bodies observe translational motion by integrating relative motion equations, with the target parameters ($h$, $\vec{R}$, $\vec{V}$) being given in the mission setup:
+
 $$ 
 \partial \ddot{x} - \left( \frac{2\mu}{R^3} + \frac{h^2}{R^4} \right) \partial x + 
 \frac{2 \left( \vec{V} \cdot \vec{R} \right) h}{R^4} \partial y -
