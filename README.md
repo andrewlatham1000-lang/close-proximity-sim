@@ -60,10 +60,9 @@ This setup allows for bodies to be more easily defined, and reduces the accumula
 
 
 ### Equations of Motion
-
+$$ 1 + 1 = 2$$
 Bodies observe translational motion by integrating relative motion equations, with the target parameters being given in the mission setup:
-
-
+<img width="781" height="306" alt="image" src="https://github.com/user-attachments/assets/d91d5aee-8f38-413f-adf0-bec28e791672" />
 
 
 This integration uses the Euler predictor-corrector method and is capable of retaining a high level of accuracy over an orbital period.
