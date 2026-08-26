@@ -1,4 +1,3 @@
-#import numpy as np
 from numpy import sin, cos, tan, pi, dot, sqrt, arctan, array, concatenate
 from numpy.linalg import norm
 
@@ -63,7 +62,7 @@ def find_LVLH_state(mu, theta, a, e):
     vp = h/r
     
     state = array([r, 0, 0,
-                      vr, vp, 0])
+                   vr, vp, 0])
     
     return state
     

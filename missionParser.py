@@ -25,10 +25,37 @@ def load_body(b):
 
         body.add(shape)
 
+    for f in b["tanks"]:
+        if f["type"] == "Cube":
+            tank = ShellCube(f["mass"])
+            fuel = Cube()
+        elif f["type"] == "Sphere":
+            tank = ShellSphere(f["mass"])
+            fuel = Sphere()
+        elif f["type"] == "Cylinder":
+            tank = ShellCylinder(f["mass"])
+            fuel = Cylinder()
+
+        tank.scale(f["scale"])
+        fuel.scale(f["scale"])
+        if type(f["rotate"]) == list:
+            tank.rotate(f["rotate"][:3], f["rotate"][3])
+            fuel.rotate(f["rotate"][:3], f["rotate"][3])
+        if type(f["move"]) == list:
+            tank.move(f["move"])
+            fuel.move(f["move"])
+
+        fuel.mass = f["fuel"]
+
+        tank = FuelTank(f["name"], tank, fuel)
+        body.add(tank)
+
     for t in b["thrusters"]:
-        thruster = Thruster(t["name"])
-        thruster.position = t["position"]
-        body.add(thruster)
+        for obj in body.shapes:
+            if hasattr(obj, "name") and obj.name == t["tank"]:
+                thruster = Thruster(t["name"], t["isp"], obj)
+                thruster.position = t["position"]
+                body.add(thruster)
 
 
     if type(b["rotate"]) == list:

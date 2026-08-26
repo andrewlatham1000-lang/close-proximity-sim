@@ -21,7 +21,9 @@ class MissionWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Relative motion")
-        self.setStyleSheet("background-color:black")
+        with open("stylesheets\\main.css") as f:
+            CSS = f.read()
+        self.setStyleSheet(CSS)
         self.setWindowIcon(QIcon("icons\\main_window_icon.png"))
         # Icon from Icon8 (https://icons8.com/icon/5374/satellite)
         self.setIconSize(QSize(20, 20))
@@ -62,7 +64,6 @@ class MissionWindow(QMainWindow):
         self.gl = glWidget(self)
         self.time_controls = TimeControl(self)
         self.left_dock = LeftDock(self)
-        self.left_dock.initialise_timeline()
         self.right_dock = RightDock(self)
 
         main_windows_layout = QHBoxLayout()
@@ -95,8 +96,7 @@ class MissionWindow(QMainWindow):
         # then makes GUI
 
         self.mission_path = path
-        bodies, self.event_times, self.mission_cmds, target = mp.load(path)
-        self.bodies = bodies
+        self.bodies, self.event_times, self.mission_cmds, target = mp.load(path)
         self.mu = target[0]
         self.target_data = target[1:]
         self.tp0 = relmo.theta2tp(target[6], target[0], target[1], target[2]) * 1000
@@ -125,20 +125,16 @@ class MissionWindow(QMainWindow):
         self.simulation_paused = True
         self.timer.stop()
         self.simulation_time = 0
-        self.event_index = 0
-        self.time_controls.display.show_time()
         self.current_warp = 0
-        self.time_controls.warp_down.setIcon(QIcon("icons\\slow_warp_disabled.svg"))
-        self.time_controls.warp_up.setIcon(QIcon("icons\\fast_warp.svg"))
-        self.time_controls.warp_down.setEnabled(False)
-        self.time_controls.warp_up.setEnabled(True)
-        self.time_controls.speed_factor.setText(f"x{self.time_warp[self.current_warp]}")
-        mission = mp.load(self.mission_path)
-        bodies, target = mission[0], mission[3]
-        self.bodies = bodies
+
+        self.bodies, self.event_times, self.mission_cmds, target = mp.load(self.mission_path)
         self.target_data[5] = target[6]
+        self.event_index = 0
+
+        self.time_controls.reset()
         self.gl.update()
-        self.left_dock.initialise_timeline()
+        self.left_dock.reset()
+        self.right_dock.reset()
 
 
     def increase_speed(self):
@@ -170,7 +166,9 @@ class MissionWindow(QMainWindow):
 
 
         if self.ongoing_cmds != "": 
-            resps = execute_commands(self.bodies, self.ongoing_cmds, self.simulation_dt)
+            resps = execute_commands(self.bodies, 
+                                     self.ongoing_cmds, 
+                                     self.time_warp[self.current_warp] * self.simulation_dt)
             self.ongoing_cmds = ""
             for r in resps:
                 if r:
@@ -179,7 +177,9 @@ class MissionWindow(QMainWindow):
         if (self.event_index < len(self.event_times) and
             self.simulation_time >= self.event_times[self.event_index]):
             # Execute mission commands at specificed simulation times
-            resps = execute_commands(self.bodies, self.mission_cmds[self.event_index], self.simulation_dt)
+            resps = execute_commands(self.bodies, 
+                                     self.mission_cmds[self.event_index], 
+                                     self.time_warp[self.current_warp] * self.simulation_dt)
             for r in resps:
                 if r:
                     self.ongoing_cmds += r + ";"

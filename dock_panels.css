@@ -1,0 +1,104 @@
+LeftDock{
+    background-color: gray;
+}
+
+RightDock{
+    background-color: gray;
+    font-size:22px;
+}
+
+.dock_title{
+    background-color:gray;
+    font-size: 30px;
+    color: #f5f5f5;
+    font-family:'Lucida Console';
+    border: 2px outset #444444;
+    font-weight: bold;
+}
+
+.time_neutral{
+    background-color: gray;
+    color: #f5f5f5;
+    font-size: 19px;
+    font-family: 'Lucida Console';
+    border: 2px outset #444444;
+    padding: 5px 0px 5px 0px;
+}
+
+.cmd_neutral{
+    background-color: gray;
+    color: #f5f5f5;
+    font-size: 17px; 
+    font-family: 'Lucida Console';
+    border: 2px outset #444444;
+    padding: 3px;
+}
+
+
+.time_active{
+    background-color: #BBBBBB; 
+    color: #000000;
+    font-size: 19px; 
+    font-family: 'Lucida Console';
+    border: 2px outset #444444;
+    padding: 5px 0px 5px 0px;
+}
+
+.cmd_active{
+    background-color: #BBBBBB; 
+    color: #000000;
+    font-size: 17px;
+    font-family: 'Lucida Console';
+    border: 2px outset #444444;
+    padding: 5px;
+}
+
+
+.time_inactive{
+    background-color: #555555; 
+    color: #f5f5f5;
+    font-size: 19px; 
+    font-family: 'Lucida Console';
+    border: 2px inset #444444;
+    padding: 5px 0px 5px 0px;
+}
+
+
+.cmd_inactive{
+    background-color: #555555; 
+    color: #f5f5f5;
+    font-size: 17px; 
+    font-family: 'Lucida Console';
+    border: 2px inset #444444;
+    padding: 5px;
+}
+
+QComboBox{
+    color: #f5f5f5;
+    background-color: gray;
+    font-size: 22px;
+    padding-left: 10px;
+    font-family: 'Lucida Console';
+    border: 2px outset #444444;
+}
+
+QComboBox::drop-down{
+    border: none;
+}
+
+QComboBox QAbstractItemView{
+    color: #f5f5f5;
+    background-color: gray;
+    font-size: 22px;
+    selection-background-color: #BBBBBB;
+    selection-color: #000000;
+}
+
+.object_info{
+    border: 2px outset #444444;
+    font-size: 19px;
+    padding-top: 10px;
+    padding-left: 10px;
+    font-family: 'Lucida Console';
+    color: #f5f5f5;
+}

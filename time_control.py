@@ -7,6 +7,9 @@ from PyQt5.QtWidgets import (
     QLCDNumber, 
     QPushButton)
 
+with open("stylesheets\\time_controls.css") as f:
+    TIME_CSS = f.read()
+
 class TimeControl(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -15,43 +18,25 @@ class TimeControl(QWidget):
 
         self.display = TimeDisplay(self)
         self.display.setGeometry(0,0,250, 60)
-        self.setStyleSheet("background-color:black")
-
-        button_style = (
-            "QPushButton {"
-            "background-color:black;"
-            "border-radius:8px;"
-            "}"
-            "QPushButton:hover {"
-            "background-color:#8B8B8B;"
-            "border: 3px outset #444444;"
-            "}"
-            "QPushButton:pressed {"
-            "background-color:#555555;"
-            "border: 3px inset #444444;"
-            "}")
+        self.setStyleSheet(TIME_CSS)
 
         self.start_button = QPushButton(icon=QIcon("icons\\play_icon.svg"), parent=self)
         self.start_button.setGeometry(255,0, 60, 60)
-        self.start_button.setStyleSheet(button_style)
         self.start_button.setIconSize(QSize(60, 60))
         self.start_button.clicked.connect(self.parent.begin_simulation)
 
         self.pause_button = QPushButton(icon=QIcon("icons\\pause_icon.svg"), parent=self)
         self.pause_button.setGeometry(320,0, 60, 60)
-        self.pause_button.setStyleSheet(button_style)
         self.pause_button.setIconSize(QSize(60, 60))
         self.pause_button.clicked.connect(self.parent.pause_simulation)
 
         self.reset_button = QPushButton(icon=QIcon("icons\\replay_icon.svg"), parent=self)
         self.reset_button.setGeometry(385,0, 60, 60)
-        self.reset_button.setStyleSheet(button_style)
         self.reset_button.setIconSize(QSize(50, 50))
         self.reset_button.clicked.connect(self.parent.reset_simulation)
 
         self.warp_down = QPushButton(icon=QIcon("icons\\slow_warp_disabled.svg"), parent=self)
         self.warp_down.setGeometry(450,0, 60, 60)
-        self.warp_down.setStyleSheet(button_style)
         self.warp_down.setIconSize(QSize(50, 50))
         self.warp_down.clicked.connect(self.parent.decrease_speed)
         self.warp_down.setEnabled(False)
@@ -59,34 +44,31 @@ class TimeControl(QWidget):
 
         self.warp_up = QPushButton(icon=QIcon("icons\\fast_warp.svg"), parent=self)
         self.warp_up.setGeometry(515,0, 60, 60)
-        self.warp_up.setStyleSheet(button_style)
         self.warp_up.setIconSize(QSize(50, 50))
         self.warp_up.clicked.connect(self.parent.increase_speed)
 
         self.speed_factor = QLabel(parent=self)
+        self.speed_factor.setProperty("class", "speed_factor")
         self.speed_factor.setText("x1")
         self.speed_factor.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        self.speed_factor.setStyleSheet(
-            "background-color:black;"
-            "color:white;"
-            "font-size: 40px;" 
-            "font-weight: bold;"
-            "font-family:'Lucida Console', monospace;")
         self.speed_factor.setGeometry(585, 0, 110, 60)
 
         self.zoom_level = QLabel(self)
+        self.zoom_level.setProperty("class", "zoom_level")
         self.zoom_level.setText("Zoom: x1.00")
         self.zoom_level.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
-        self.zoom_level.setStyleSheet(
-            "background-color:black;"
-            "color:white;"
-            "font-size: 30px;" 
-            "font-weight: bold;"
-            "font-family:'Lucida Console', monospace;")
         self.zoom_level.setGeometry(750, 0, 350, 60)
 
     def set_zoom(self, zoom):
         self.zoom_level.setText(f"Zoom: x{zoom:.2f}")
+
+    def reset(self):
+        self.display.show_time()
+        self.warp_down.setIcon(QIcon("icons\\slow_warp_disabled.svg"))
+        self.warp_up.setIcon(QIcon("icons\\fast_warp.svg"))
+        self.warp_down.setEnabled(False)
+        self.warp_up.setEnabled(True)
+        self.speed_factor.setText(f"x1")
 
 
 class TimeDisplay(QLCDNumber):
@@ -95,7 +77,7 @@ class TimeDisplay(QLCDNumber):
         self.parent = parent
         self.setSegmentStyle(QLCDNumber.SegmentStyle.Filled)
         self.setDigitCount(11)
-        self.setStyleSheet("background-color:black; color:#00ff00")
+        self.setStyleSheet(TIME_CSS)
 
         self.show_time()
 

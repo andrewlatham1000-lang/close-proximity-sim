@@ -34,6 +34,7 @@ def q2R(q):
 
     return R
 
+g0 = 9.80665
 ##########################################################################################################################
 ############################################ BODY & SHAPE CLASSES ########################################################
 ##########################################################################################################################
@@ -87,6 +88,7 @@ class Body:
 
             ms = np.array([s.mass for s in self.shapes])
             M = np.sum(ms)
+            self.mass = M
             self.COM = np.array([np.sum(xs * ms) / M,
                                  np.sum(ys * ms) / M,
                                  np.sum(zs * ms) / M])
@@ -121,7 +123,9 @@ class Body:
         else:
             self.shapes = np.append(self.shapes, obj)
             obj.parent = self
-            self.mass += obj.mass
+            if obj.__class__.__name__ == "FuelTank":
+                obj.shape.parent = self
+                obj.fuel.parent = self
             self.calculate_COM()
             self.calculate_inertia_matrix()
     
@@ -134,7 +138,6 @@ class Body:
             i = np.where(self.shapes == obj)
             self.shapes = np.delete(self.shapes, i)
             obj.parent = None
-            self.mass -= obj.mass
             self.calculate_COM()
             self.calculate_inertia_matrix()
         
@@ -246,12 +249,14 @@ class Shape:
         self.inertia_matrix = self.inertia()
         if self.parent:
             self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
                 
             
     def move(self, offset):
         self.position += offset
         if self.parent:
             self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
             
             
     def rotate(self, axis, angle):
@@ -268,6 +273,7 @@ class Shape:
         self.rotation_matrix = np.dot(R.T, self.rotation_matrix) 
         if self.parent:
             self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
 
     def find_inertial(self, camera_rotation, camera_zoom, camera_offset):
         if self.parent:
@@ -295,10 +301,12 @@ class Shape:
             
 
 class Thruster:
-    def __init__(self, name):
+    def __init__(self, name, isp, tank):
         self.name = name
         self.parent = None
         self.position = np.zeros(3)
+        self.isp = isp
+        self.tank = tank
 
         self.vertices = np.array([
             [-0.05, -0.05, -0.05],
@@ -334,7 +342,16 @@ class Thruster:
         pos2COM_u = pos2COM / pos2COM_mag
 
         thrust_mag = np.linalg.norm(thrust_vector)
-        thrust_vector_u = thrust_vector / thrust_mag
+        thrust_u = thrust_vector / thrust_mag
+
+        fuel_used = thrust_mag * dt / (self.isp * g0)
+        if fuel_used >= self.tank.fuel.mass:
+            fuel_used = self.tank.fuel.mass
+            dt = fuel_used * self.isp * g0 / thrust_mag
+
+        
+
+        self.tank.burn_fuel(fuel_used)
 
         # Split thrust into pure & orthogonal components
         pure_thrust = np.dot(thrust_vector, pos2COM_u) * pos2COM_u
@@ -362,7 +379,7 @@ class Thruster:
                 self.vertices.T).T + 
             inertial_COM)
 
-        glColor3f(1.0, 0.10, 0.25)
+        glColor3f(0, 0.94, 0.94)
         glBegin(GL_LINES)
 
         for l in self.lines:
@@ -370,6 +387,77 @@ class Thruster:
             glVertex3f(inertial_vertices[l[1], 0], inertial_vertices[l[1],1], inertial_vertices[l[1],2])
 
         glEnd()
+
+
+class FuelTank:
+    def __init__(self, name, shape, fuel):
+        self.parent = None
+        self.name = name
+        self.shape = shape
+        self.fuel = fuel
+        self.mass = shape.mass + fuel.mass
+        self.max_fuel = fuel.mass
+        self.position = shape.position
+        self.basis = shape.basis
+        self.rotation_matrix = shape.rotation_matrix
+        self.quarternion = shape.quarternion
+        self.inertia_matrix = shape.inertia_matrix + fuel.inertia_matrix
+        self.color = (min(1, 2 * (1 - self.fuel.mass / self.max_fuel)),
+                      min(1, 2 * self.fuel.mass / self.max_fuel),
+                      0)
+
+    def burn_fuel(self, mf):
+        self.fuel.mass -= mf
+        self.fuel.inertia_matrix = self.fuel.inertia()
+
+        self.mass = self.shape.mass + self.fuel.mass
+        self.inertia_matrix = self.shape.inertia_matrix + self.fuel.inertia_matrix
+        self.color = (min(1, 2 * (1 - self.fuel.mass / self.max_fuel)),
+                      min(1, 2 * self.fuel.mass / self.max_fuel),
+                      0)
+        
+        self.parent.calculate_COM()
+        self.parent.calculate_inertia_matrix()
+
+    def scale(self, scale):
+        if type(scale) == int or type(scale) == float:
+            scale = scale * np.ones(3)
+        scale_matrix = np.diag(scale)
+        
+        self.basis = np.dot(scale_matrix, self.basis)
+        self.inertia_matrix = self.inertia()
+
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+                            
+    def move(self, offset):
+        self.position += offset
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+                      
+    def rotate(self, axis, angle):
+        angle = np.radians(angle)
+        axis = axis / np.linalg.norm(axis)
+        
+        q = np.array([axis[0] * np.sin(angle/2),
+                        axis[1] * np.sin(angle/2),
+                        axis[2] * np.sin(angle/2),
+                        np.cos(angle/2)])
+        
+        R = q2R(q)
+        
+        self.rotation_matrix = np.dot(R.T, self.rotation_matrix) 
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+
+    def plot(self, camera_rotation, camera_zoom, camera_offset):
+        self.shape.plot(camera_rotation, camera_zoom, camera_offset, color=self.color)
+
+    def update_timestep(self):
+        pass
         
 
 
@@ -463,6 +551,68 @@ class Cube(Shape):
         Iz = (1/12) * self.mass * (lx**2 + ly**2)
         return np.diag([Ix, Iy, Iz])
         
+
+class ShellCube(Shape):
+    def __init__(self, mass):
+        super().__init__(mass)
+
+        self.vertices = np.array([[-0.5, -0.5, -0.5],
+                                    [0.5, -0.5, -0.5],
+                                    [0.5, 0.5, -0.5],
+                                    [-0.5, 0.5, -0.5],
+                                    
+                                    [-0.5, -0.5, 0.5],
+                                    [0.5, -0.5, 0.5],
+                                    [0.5, 0.5, 0.5],
+                                    [-0.5, 0.5, 0.5]])
+        
+        self.lines  =   np.array([[0,1], [1,2], [2,3], [3,0],
+                                [4,5], [5,6], [6,7], [7,4],
+                                [0,4], [1,5], [2,6], [3,7]])
+
+    def plot(self, camera_rotation, camera_zoom, camera_offset, color=(0.9, 0.06, 0.9)):
+        inertial_COM, inertial_vertices = self.find_inertial(camera_rotation, camera_zoom, camera_offset)
+
+
+        glColor3f(*color)
+        glBegin(GL_LINES)
+
+        for l in self.lines:
+            glVertex3f(inertial_vertices[l[0], 0], inertial_vertices[l[0],1], inertial_vertices[l[0],2])
+            glVertex3f(inertial_vertices[l[1], 0], inertial_vertices[l[1],1], inertial_vertices[l[1],2])
+
+        glEnd()
+        
+    def volume(self):
+        return 1
+
+    def inertia(self):
+        lx, ly, lz = np.diag(self.basis)
+        m = self.mass
+        d = 3 * (lx*ly + lx*lz + ly*lz)
+
+        #L-R contribution
+        Ix_LR = ly**3 * lz + ly * lz**3
+        Iy_LR = ly * lz**3 + 3 * lx**2 * ly * lz
+        Iz_LR = ly**3 * lz + 3 * lx**2 * ly * lz
+
+        #F-B contribution
+        Ix_FB = lx * lz**3 + 3 * lx * ly**2 * lz
+        Iy_FB = lx**3 * lz + lx * lz**3
+        Iz_FB = lx**3 * lz + 3 * lx * ly**2 * lz
+
+        #U-D contribution
+        Ix_UD = lx * ly**3 + 3 * lx * ly * lz**2
+        Iy_UD = lx**3 * ly + 3 * lx * ly * lz**2
+        Iz_UD = lx**3 * ly + lx * lz**3
+
+        Ix = (m/d) * (Ix_LR + Ix_FB + Ix_UD) 
+        Iy = (m/d) * (Iy_LR + Iy_FB + Iy_UD) 
+        Iz = (m/d) * (Iz_LR + Iz_FB + Iz_UD) 
+
+        return np.diag([Ix, Iy, Iz])
+
+
 class Sphere(Shape):
     def __init__(self, density=2700):
         super().__init__(density)
@@ -509,6 +659,19 @@ class Sphere(Shape):
 
         glEnd()
 
+    def scale(self, scale):
+        if type(scale) == int or type(scale) == float:
+            scale = scale * np.ones(3)
+        else:
+            scale = scale[0] * np.ones(3)
+        
+        self.basis = scale * self.basis
+        self.mass = self.density * self.volume()
+        self.inertia_matrix = self.inertia()
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+            
     def volume(self):
         return (4/3) * np.pi * np.prod(np.linalg.norm(self.basis, axis = 0))
 
@@ -519,6 +682,74 @@ class Sphere(Shape):
         Iz = (1/5) * self.mass * (lx**2 + ly**2)
         return np.diag([Ix, Iy, Iz])
         
+
+class ShellSphere(Shape):
+    def __init__(self, mass):
+        super().__init__(mass)
+
+        self.n, self.m = 9, 5
+        theta = np.linspace(0, 2*np.pi, self.n)
+        phi = np.linspace(0, np.pi, self.m)
+
+        positions = np.zeros((1,3))
+
+        for t in theta:
+            for p in phi:
+                x = 0.5 * np.sin(p) * np.cos(t)
+                y = 0.5 * np.sin(p) * np.sin(t)
+                z = 0.5 * np.cos(p)
+                positions = np.append(positions, np.array([[x,y,z]]), axis=0)
+        
+        self.vertices = positions[1:]
+
+    def plot(self, camera_rotation, camera_zoom, camera_offset, color=(0.9, 0.06, 0.9)):
+        inertial_COM, inertial_vertices = self.find_inertial(camera_rotation, camera_zoom, camera_offset)
+
+        X, Y, Z = inertial_vertices.T
+        latX, latY, latZ = (np.array(np.split(X, self.n)).T, 
+                            np.array(np.split(Y, self.n)).T, 
+                            np.array(np.split(Z, self.n)).T)
+        longX, longY, longZ = (np.array(np.split(X, self.n)), 
+                                np.array(np.split(Y, self.n)), 
+                                np.array(np.split(Z, self.n)))    
+        
+        glColor3f(*color)
+        glBegin(GL_LINES)
+
+        for i in range(1, len(latX)-1):
+            for j in range(len(latX[i])-1):
+                glVertex3f(latX[i, j], latY[i, j], latZ[i, j])
+                glVertex3f(latX[i, j+1], latY[i, j+1], latZ[i, j+1])
+                
+
+        for i in range(1, len(longX)):
+            for j in range(len(longX[i])-1):
+                glVertex3f(longX[i, j], longY[i, j], longZ[i, j])
+                glVertex3f(longX[i, j+1], longY[i, j+1], longZ[i, j+1])
+
+        glEnd()
+
+    def scale(self, scale):
+        if type(scale) == int or type(scale) == float:
+            scale = scale * np.ones(3)
+        else:
+            scale = scale[0] * np.ones(3)
+        
+        self.basis = scale * self.basis
+        self.mass = self.density * self.volume()
+        self.inertia_matrix = self.inertia()
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+
+    def volume(self):
+        return 1
+
+    def inertia(self):
+        R = self.basis[0,0]
+        I = (2/3) * self.mass * R**2
+        return np.diag(I * np.ones(3))
+
 
 class Cylinder(Shape):
     def __init__(self, density=2700):
@@ -547,6 +778,20 @@ class Cylinder(Shape):
         
         glEnd()
 
+    def scale(self, scale):
+        if type(scale) == int or type(scale) == float:
+            scale = scale * np.ones(3)
+        else:
+            scale = np.array([scale[0], scale[0], scale[1]])
+
+        scale_matrix = np.diag(scale)
+        self.basis = np.dot(scale_matrix, self.basis)
+        self.mass = self.density * self.volume()
+        self.inertia_matrix = self.inertia()
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+            
     def volume(self):
         return np.pi * np.prod(np.linalg.norm(self.basis, axis = 0))
     
@@ -557,3 +802,68 @@ class Cylinder(Shape):
         Iz = (1/4) * self.mass * (lx**2 + ly**2)
         return np.diag([Ix, Iy, Iz])
 
+
+class ShellCylinder(Shape):
+    def __init__(self, mass):
+        super().__init__(mass)
+
+        thetas = np.linspace(0, 2*np.pi, 8, endpoint=False)
+        x = 0.5 * np.concatenate((np.cos(thetas), np.cos(thetas)))
+        y = 0.5 * np.concatenate((np.sin(thetas), np.sin(thetas)))
+        z = 0.5 * np.concatenate((np.ones(8), -np.ones(8)))
+        
+        self.vertices = np.array([x,y,z]).T
+        self.lines = np.array([
+            [0,1], [1,2], [2,3], [3,4], [4,5], [5,6], [6,7], [7,0],
+            [8,9], [9,10], [10,11], [11,12], [12,13], [13,14], [14,15], [15,8],
+            [0,8], [1,9], [2,10], [3,11], [4,12], [5,13], [6,14], [7,15]])
+
+    def plot(self, camera_rotation, camera_zoom, camera_offset, color=(0.9, 0.06, 0.9)):
+        inertial_COM, inertial_vertices = self.find_inertial(camera_rotation, camera_zoom, camera_offset)
+
+        glColor3f(*color)
+        glBegin(GL_LINES)
+
+        for l in self.lines:
+            glVertex3f(inertial_vertices[l[0], 0], inertial_vertices[l[0],1], inertial_vertices[l[0],2])
+            glVertex3f(inertial_vertices[l[1], 0], inertial_vertices[l[1],1], inertial_vertices[l[1],2])
+        
+        glEnd()
+
+    def scale(self, scale):
+        if type(scale) == int or type(scale) == float:
+            scale = scale * np.ones(3)
+        else:
+            scale = np.array([scale[0], scale[0], scale[1]])
+
+        scale_matrix = np.diag(scale)
+        self.basis = np.dot(scale_matrix, self.basis)
+        self.mass = self.density * self.volume()
+        self.inertia_matrix = self.inertia()
+        if self.parent:
+            self.parent.calculate_COM()
+            self.parent.calculate_inertia_matrix()
+
+    def volume(self):
+        return 1
+    
+    def inertia(self):
+        lx, ly, lz = np.linalg.norm(self.basis, axis = 0)
+        r, h = lx, lz
+        A = 2 * np.pi * r * h + 2 * np.pi * r**2
+        m_cylinder = (2 * np.pi * r * h) / A
+        m_circle = (np.pi * r**2) / A
+
+        # From open cylinder
+        Ix_cy = Iy_cy = (1/12) * m_cylinder * (6 * r**2 + h**2)
+        Iz_cy = m_cylinder * r**2
+
+        # From circles
+        Ix_ci = Iy_ci = (1/2) * m_circle * (r**2 + h**2)
+        Iz_ci = m_circle * r**2
+        
+        Ix = Ix_cy + Ix_ci
+        Iy = Iy_cy + Iy_ci
+        Iz = Iz_cy + Iz_ci
+
+        return np.diag([Ix, Iy, Iz])

@@ -24,7 +24,7 @@
             },
             {
                 "type": "Cylinder",
-                "scale": [1,1,2],
+                "scale": [1,2],
                 "move": [0,0,1.5],
                 "rotate": 0
             },
@@ -35,10 +35,23 @@
                 "rotate": 0
             }
         ],
+        "tanks": [
+            {
+                "name": "tank1",
+                "mass": 10,
+                "fuel": 10,
+                "type": "Cylinder",
+                "scale": [0.5, 0.5, 1],
+                "move": [0,0,0],
+                "rotate": [0,0,1, 45]
+            }
+        ],
         "thrusters": [
             {
                 "name": "T1",
-                "position": [0,0,0]
+                "position": [0,0,0],
+                "isp": 1200,
+                "tank": "tank1"
             }
         ]
     },
@@ -56,6 +69,7 @@
                 "rotate": 0
             }
         ],
+        "tanks": [],
         "thrusters": []
     }
 ],

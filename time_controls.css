@@ -1,0 +1,39 @@
+TimeControl{
+    background-color: black;
+}
+
+TimeDisplay{
+    background-color: black;
+    color:#00ff00;
+}
+
+QPushButton {
+    background-color:black;
+    border-radius:8px;
+}
+
+QPushButton:hover {
+    background-color:#8B8B8B;
+    border: 3px outset #444444;
+}
+
+QPushButton:pressed {
+    background-color:#555555;
+    border: 3px inset #444444;
+}
+
+.speed_factor{
+    background-color:black;
+    color:white;
+    font-size: 40px;
+    font-weight: bold;
+    font-family:'Lucida Console', monospace;
+}
+
+.zoom_level{
+    background-color:black;
+    color:white;
+    font-size: 30px;
+    font-weight: bold;
+    font-family:'Lucida Console', monospace;
+}
