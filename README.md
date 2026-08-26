@@ -62,7 +62,7 @@ This setup allows for bodies to be more easily defined, and reduces the accumula
 ### Equations of Motion
 
 $$ 
-1 + 1 = 2 
+\partial x\dot\dot
 $$
 
 Bodies observe translational motion by integrating relative motion equations, with the target parameters being given in the mission setup:
