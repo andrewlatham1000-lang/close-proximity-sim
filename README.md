@@ -56,12 +56,30 @@ This section will define some of the terms used when describing how to build mis
 The global reference frame for this simulation is the Local Vertical Local Horizontal (LVLH) frame. This is the frame shown by the GUI. However, Bodies within the simulation hold information in the body-fixed frame, as well as their position and rotation in the global frame to allow for conversion to the LVLH frame. Similarly, Shapes and other objects which make up the Body are defined in their own body-fixed frame, but hold their position and rotation relative to the body-fixed frame of the Body.
 
 
-This setup allows for bodies to be more easily defined, and reduces the accumulation of error during simulation integration. The centre of mass and vertices for each shape in the LVLH frame are calculated as follows, including terms for camera zoom ($M$), position ($\vec{p}$), and rotation ($\vec{R}$):
+This setup allows for bodies to be more easily defined, and reduces the accumulation of error during simulation integration. The centre of mass and vertices for each shape in the LVLH frame are calculated as follows:
+
+1. Find the position of the centre of mass of each shape relative to the CoM of the body
 
 $$
-\vec{R}_{CoM}^{LVLH} = M (\vec{R}_{camera} \cdot ( (\vec{R}_{body} \cdot (\vec{p}_{shape} - \vec{p}_{body,CoM})) + \vec{p}_{body} ) ) + \vec{p}_{camera}
+\vec{p}_{shape,CoM}^{body} = \vec{R}_{body} \cdot (\vec{p}_{shape,CoM} - \vec{p}_{body,CoM}))
 $$
 
+2. Find the position of the CoM of the shape in the LVLH frame
+
+$$
+\vec{p}_{shape,CoM}^{LVLH} = \vec{p}_{shape,CoM}^{body} + \vec{p}_{body} 
+$$
+
+3. Include camera zoom ($M$), position, and rotation
+$$
+\vec{p}_{shape,CoM}^{LVLH, camera} = M \cdot (\vec{R}_{camera} \cdot \vec{p}_{shape,CoM}^{LVLH}) + \vec{p}_{camera}
+$$
+
+Once the CoM in the LVLH frame has been determined, it can be used to find the position of each vertex of the shape used in the GUI representation:
+
+$$
+\vec{p}_{shape, vertex}^{LVLH,camera} = M \cdot ( \vec{R}_{camera} \cdot \vec{R}_{body} \cdot \vec{R}_{shape} \cdot \vec{p}_{shape,vertex} ) + \vec{p}_{camera}
+$$
 
 ### Equations of Motion
 
