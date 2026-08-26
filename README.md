@@ -62,7 +62,18 @@ This setup allows for bodies to be more easily defined, and reduces the accumula
 ### Equations of Motion
 
 $$ 
-\partial \dot{\dot{x}}
+\partial \ddot{x} - \left( \frac{2\mu}{R^3} + \frac{h^2}{R^4} \right) \partial x + 
+\frac{2 \left( \vec{V} \cdot \vec{R} \right) h}{R^4} \partial y -
+2 \frac{h}{R^2} \partial \dot{y} = 0
+$$
+$$ 
+\partial \ddot{y} - \left( \frac{\mu}{R^3} + \frac{h^2}{R^4} \right) \partial y -
+\frac{2 \left( \vec{V} \cdot \vec{R} \right) h}{R^4} \partial x +
+2 \frac{h}{R^2} \partial \dot{x} = 0
+$$
+
+$$
+\partial \ddot{z} + \frac{\mu}{R^3} \partial z = 0
 $$
 
 Bodies observe translational motion by integrating relative motion equations, with the target parameters being given in the mission setup:
