@@ -56,7 +56,11 @@ This section will define some of the terms used when describing how to build mis
 The global reference frame for this simulation is the Local Vertical Local Horizontal (LVLH) frame. This is the frame shown by the GUI. However, Bodies within the simulation hold information in the body-fixed frame, as well as their position and rotation in the global frame to allow for conversion to the LVLH frame. Similarly, Shapes and other objects which make up the Body are defined in their own body-fixed frame, but hold their position and rotation relative to the body-fixed frame of the Body.
 
 
-This setup allows for bodies to be more easily defined, and reduces the accumulation of error during simulation integration. The centre of mass and vertices for each shape in the LVLH frame are calculated as follows, including terms for camera zoom, position, and rotation:
+This setup allows for bodies to be more easily defined, and reduces the accumulation of error during simulation integration. The centre of mass and vertices for each shape in the LVLH frame are calculated as follows, including terms for camera zoom ($M$), position ($\vec{p}$), and rotation ($\vec{R}$):
+
+$$
+\vec{R}_{CoM}^{LVLH} = M (\vec{R}_{camera} \cdot ( (\vec{R}_{body} \cdot (\vec{p}_{shape} - \vec{p}_{body,CoM)) + \vec{p}_{body} ) ) + \vec{p}_{camera}
+$$
 
 
 ### Equations of Motion
