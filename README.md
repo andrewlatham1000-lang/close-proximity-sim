@@ -102,13 +102,41 @@ $$
 $$
 
 
-This integration uses the Euler predictor-corrector method and is capable of retaining a high level of accuracy over an orbital period.
+This integration uses the Euler predictor-corrector method and is capable of retaining a high level of accuracy over an orbital period. Given an initial state ($\vec{r}_0$, $\vec{v}_0$), the above equations are used to calculate the acceleration of the body ($\vec{a}_0$), which provides a predicted next state:
 
-The equations for rotational motion are calculated from quarternions:
+$$
+\vec{v}_1^p = \vec{v}_0 + \vec{a}_0 \Delta t
+$$
+$$
+\vec{r}_1^p = \vec{r}_0 + \vec{v}_0 \Delta t + \frac{1}{2} \vec{a}_0 \Delta t^2
+$$
+
+The acceleration is then recalculated at this next time step ($\vec{a}_1^p$), and is used to correct the guess for the next time step:
+
+$$
+\vec{v}_1^c = \vec{v}_0 + \frac{1}{2} \left( \vec{a}_0 + \vec{a}_1^p \right) \Delta t
+$$
+
+$$
+\vec{r}_1^c = \vec{r}_0 + \frac{1}{2} \left( \vec{v}_0 + \vec{v}_1^c \right) \Delta t + \frac{1}{4} \left( \vec{a}_0 + \vec{a}_1^p \right) \Delta t^2
+$$
 
 
+The bodies current rotational state is stored as a quarternion ($\vec{q}$), which is also converted into a rotation matrix ($\vec{R}$) for frame conversions, combined with the current angular velocity ($\vec{\omega}$) of the body, which is given in the body fixed frame. The final quarternion is also normalised to have a magnitude of 1 to prevent stretching of the shape:
 
-These equations update the position and rotation matrix of each body in the LVLH frame.
-
-
+$$
+\vec{\omega}^{LVLH} = \vec{R} \cdot \vec{\omega}
+$$
+$$
+\dot{\vec{q}} = 
+\begin{pmatrix} 
+0 & \omega_3 & -\omega_2  & \omega_1 \\ 
+-\omega_3 & 0 & \omega_1  & \omega_2 \\ 
+\omega_2 & -\omega_1 & 0  & \omega_3 \\ 
+-\omega_1 & -\omega_2 & -\omega_3  & 0 \\ 
+\end{pmatrix}^{LVLH} \vec{q}
+$$
+$$
+\vec{q}_{n+1} = \vec{q}_n + \dot{\vec{q}}_n \Delta t
+$$
 
