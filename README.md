@@ -59,7 +59,7 @@ The global reference frame for this simulation is the Local Vertical Local Horiz
 This setup allows for bodies to be more easily defined, and reduces the accumulation of error during simulation integration. The centre of mass and vertices for each shape in the LVLH frame are calculated as follows, including terms for camera zoom ($M$), position ($\vec{p}$), and rotation ($\vec{R}$):
 
 $$
-\vec{R}_{CoM}^{LVLH} = M (\vec{R}_{camera} \cdot ( (\vec{R}_{body} \cdot (\vec{p}_{shape} - \vec{p}_{body,CoM)) + \vec{p}_{body} ) ) + \vec{p}_{camera}
+\vec{R}_{CoM}^{LVLH} = M (\vec{R}_{camera} \cdot ( (\vec{R}_{body} \cdot (\vec{p}_{shape} - \vec{p}_{body,CoM})) + \vec{p}_{body} ) ) + \vec{p}_{camera}
 $$
 
 
